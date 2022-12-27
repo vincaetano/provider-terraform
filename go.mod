@@ -1,9 +1,9 @@
-module github.com/upbound/provider-terraform
+module github.com/vincaetano/provider-terraform
 
 go 1.19
 
 require (
-	github.com/crossplane/crossplane-runtime v0.18.0
+	github.com/crossplane/crossplane-runtime v0.19.0-rc.0.0.20220930073209-84e629b95898
 	github.com/crossplane/crossplane-tools v0.0.0-20220310165030-1f43fc12793e
 	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0

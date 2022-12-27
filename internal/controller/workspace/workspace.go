@@ -41,10 +41,10 @@ import (
 
 	"github.com/hashicorp/go-getter"
 
-	"github.com/upbound/provider-terraform/apis/v1beta1"
-	"github.com/upbound/provider-terraform/internal/controller/features"
-	"github.com/upbound/provider-terraform/internal/terraform"
-	"github.com/upbound/provider-terraform/internal/workdir"
+	"github.com/vincaetano/provider-terraform/apis/v1beta1"
+	"github.com/vincaetano/provider-terraform/internal/controller/features"
+	"github.com/vincaetano/provider-terraform/internal/terraform"
+	"github.com/vincaetano/provider-terraform/internal/workdir"
 )
 
 const (

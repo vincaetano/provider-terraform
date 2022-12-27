@@ -1,7 +1,7 @@
 # ====================================================================================
 # Setup Project
 PROJECT_NAME := provider-terraform
-PROJECT_REPO := github.com/upbound/$(PROJECT_NAME)
+PROJECT_REPO := github.com/vincaetano/$(PROJECT_NAME)
 
 PLATFORMS ?= linux_amd64 linux_arm64
 -include build/makelib/common.mk
@@ -29,8 +29,8 @@ UPTEST_VERSION = v0.3.0
 -include build/makelib/k8s_tools.mk
 
 # Setup Images
-REGISTRY_ORGS ?= xpkg.upbound.io/upbound
-IMAGES = provider-terraform
+REGISTRY_ORGS ?= docker.io
+IMAGES = vicaa/provider-terraform
 -include build/makelib/imagelight.mk
 
 # ====================================================================================
@@ -92,66 +92,42 @@ dev: $(KIND) $(KUBECTL)
 	@$(INFO) Starting Provider SQL controllers
 	@$(GO) run cmd/provider/main.go --debug
 
-dev-clean: $(KIND) $(KUBECTL)
-	@$(INFO) Deleting kind cluster
-	@$(KIND) delete cluster --name=$(PROJECT_NAME)-dev
+# Options
+ORG_NAME=vicaal
+PROVIDER_NAME=provider-terraform
 
-.PHONY: reviewable submodules fallthrough test-integration run dev dev-clean
+build: generate test
+	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o ./bin/$(PROVIDER_NAME)-controller cmd/provider/main.go
 
-# ====================================================================================
-# End to End Testing
-CROSSPLANE_NAMESPACE = upbound-system
--include build/makelib/local.xpkg.mk
--include build/makelib/controlplane.mk
+image: generate test
+	docker build . -t $(ORG_NAME)/$(PROVIDER_NAME):latest -f cluster/images/provider-terraform/Dockerfile
 
-# This target requires the following environment variables to be set:
-# - UPTEST_EXAMPLE_LIST, a comma-separated list of examples to test
-# - UPTEST_CLOUD_CREDENTIALS (optional), cloud credentials for the provider being tested, e.g. export UPTEST_CLOUD_CREDENTIALS=$(cat ~/.aws/credentials)
-# - UPTEST_DATASOURCE_PATH (optional), see https://github.com/upbound/uptest#injecting-dynamic-values-and-datasource
-uptest: $(UPTEST) $(KUBECTL) $(KUTTL)
-	@$(INFO) running automated tests
-	@KUBECTL=$(KUBECTL) KUTTL=$(KUTTL) $(UPTEST) e2e "${UPTEST_EXAMPLE_LIST}" --data-source="${UPTEST_DATASOURCE_PATH}" --setup-script=cluster/test/setup.sh || $(FAIL)
-	@$(OK) running automated tests
+image-push:
+	docker push $(ORG_NAME)/$(PROVIDER_NAME):latest
 
-local-deploy: build controlplane.up local.xpkg.deploy.provider.$(PROJECT_NAME)
-	@$(INFO) running locally built provider
-	@$(KUBECTL) wait provider.pkg $(PROJECT_NAME) --for condition=Healthy --timeout 5m
-	@$(KUBECTL) -n upbound-system wait --for=condition=Available deployment --all --timeout=5m
-	@$(OK) running locally built provider
+run: generate
+	kubectl apply -f package/crds/ -R
+	go run cmd/provider/main.go -d
 
-# This target requires the following environment variables to be set:
-# - UPTEST_CLOUD_CREDENTIALS, cloud credentials for the provider being tested, e.g. export UPTEST_CLOUD_CREDENTIALS=$(cat ~/.aws/credentials)
-# - UPTEST_EXAMPLE_LIST, a comma-separated list of examples to test
-# - UPTEST_DATASOURCE_PATH, see https://github.com/upbound/uptest#injecting-dynamic-values-and-datasource
-e2e: local-deploy uptest
+all: image image-push
 
-.PHONY: uptest e2e
-# ====================================================================================
-# Special Targets
+generate:
+	go generate ./...
+	@find package/crds -name *.yaml -exec sed -i.sed -e '1,2d' {} \;
+	@find package/crds -name *.yaml.sed -delete
 
-define CROSSPLANE_MAKE_HELP
-Crossplane Targets:
-    submodules            Update the submodules, such as the common build scripts.
-    run                   Run crossplane locally, out-of-cluster. Useful for development.
+lint:
+	$(LINT) run
 
-endef
-# The reason CROSSPLANE_MAKE_HELP is used instead of CROSSPLANE_HELP is because the crossplane
-# binary will try to use CROSSPLANE_HELP if it is set, and this is for something different.
-export CROSSPLANE_MAKE_HELP
+tidy:
+	go mod tidy
 
-crossplane.help:
-	@echo "$$CROSSPLANE_MAKE_HELP"
+test:
+	go test -v ./...
 
-help-special: crossplane.help
+# Tools
 
-.PHONY: crossplane.help help-special
+KIND=$(shell which kind)
+LINT=$(shell which golangci-lint)
 
-go.cachedir:
-	@go env GOCACHE
-
-.PHONY: go.cachedir
-
-go.mod.cachedir:
-	@go env GOMODCACHE
-
-.PHONY: go.mod.cachedir
+.PHONY: generate tidy lint clean build image all run
